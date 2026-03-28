@@ -1589,17 +1589,6 @@
     if (tabName === 'mods') renderMods();
     if (tabName === 'support' && currentUser) renderSupportPanel();
     if (tabName === 'admin' && isAdmin()) showAdminPanel();
-  }
-  
-  function showCaptcha() {
-    const captchaHtml = `<div class="captcha-overlay" id="captchaOverlay"><div class="captcha-box"><h3>🛡️ Подтверждение</h3><p>Подтвердите, что вы не бот</p><div class="cf-turnstile" data-sitekey="0x4AAAAAACwZCtptfmNTzxGz" data-callback="onCaptchaSuccess"></div></div></div>`;
-    document.body.insertAdjacentHTML('beforeend', captchaHtml);
-  }
-  window.onCaptchaSuccess = function() {
-    document.getElementById('captchaOverlay').style.opacity = '0';
-    setTimeout(() => { document.getElementById('captchaOverlay').remove(); init(); }, 500);
-  };
-  
   async function init() {
     await loadMods();
     await loadBannedIPs();
