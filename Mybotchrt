@@ -1,0 +1,219 @@
+import telegram
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+import requests
+import re
+import json
+import base64
+from urllib.parse import urlparse, parse_qs
+import asyncio
+
+# Токен твоего бота (получи у @BotFather)
+TOKEN = "8693852782:AAEjtGADCyPlN0f4hDeq562QCzRPyJ0qZKo"
+
+# Эмодзи из твоего пака (https://t.me/addemoji/zalchikmods_by_TgEmodziBot)
+EMOJIS = {
+    "welcome": "✨",
+    "bypass": "🚀",
+    "script": "📜",
+    "back": "🔙",
+    "success": "✅",
+    "loading": "⏳",
+    "warning": "⚠️",
+    "fire": "🔥"
+}
+
+# Функция для обхода platoboost
+def bypass_platoboost(url):
+    try:
+        # Извлекаем ID из URL
+        match = re.search(r'id=(\d+)', url)
+        if not match:
+            return None
+        
+        # Отправляем запрос к API
+        api_url = f"https://gateway.platoboost.com/a/8?id={match.group(1)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://platoboost.app/"
+        }
+        
+        response = requests.get(api_url, headers=headers, allow_redirects=False)
+        
+        # Проверяем параметр r (base64)
+        if 'r=' in response.headers.get('Location', ''):
+            location = response.headers.get('Location', '')
+            match_r = re.search(r'r=([^&]+)', location)
+            if match_r:
+                decoded = base64.b64decode(match_r.group(1)).decode('utf-8')
+                return decoded
+                
+        return "https://loot-link.com/s?r=Y2xhc3M="
+    except Exception as e:
+        return f"Ошибка: {str(e)}"
+
+# Обработчик команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Отправляем фото (то самое с 3-й фотки)
+    photo_url = "https://telegra.ph/Photo-04-19-57"  # Замени на свою ссылку
+    
+    # Клавиатура с двумя кнопками
+    keyboard = [
+        [InlineKeyboardButton(f"{EMOJIS['script']} Каталог скриптов", callback_data='scripts_catalog')],
+        [InlineKeyboardButton(f"{EMOJIS['bypass']} Обойти ссылку", callback_data='bypass_link')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    welcome_text = f"""\
+{EMOJIS['welcome']} <b>Добро пожаловать в @{update.effective_chat.username}</b>
+
+{EMOJIS['fire']} <b>Нужен простой способ обхода ссылок?</b>
+Наш бот поддерживает много популярных сервисов, помогая вам быстро получать доступ к контенту.
+
+{EMOJIS['script']} <b>Кроме того, мы предлагаем поиск скриптов на нескольких сайтах!</b>
+
+📌 <b>Начните прямо сейчас:</b>
+используйте меню ниже, чтобы обойти ссылки или найти скрипты.
+"""
+    
+    await update.message.reply_photo(
+        photo=photo_url,
+        caption=welcome_text,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+# Каталог скриптов
+async def scripts_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("🧟 Zombie 1v4", callback_data='script_zombie')],
+        [InlineKeyboardButton(f"{EMOJIS['back']} Назад", callback_data='back_to_menu')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_caption(
+        caption=f"{EMOJIS['script']} <b>Каталог скриптов</b>\n\nВыберите скрипт:",
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+# Скрипт Zombie 1v4
+async def script_zombie(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    script = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/wertyrust-byte/script_roblox200/refs/heads/main/Zombie_hub"))()'
+    
+    keyboard = [[InlineKeyboardButton(f"{EMOJIS['back']} Назад", callback_data='scripts_catalog')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_caption(
+        caption=f"{EMOJIS['success']} <b>Скрипт Zombie 1v4</b>\n\n<code>{script}</code>\n\nНажми на скрипт, чтобы скопировать",
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+# Начало обхода ссылки
+async def bypass_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['awaiting_link'] = True
+    
+    keyboard = [[InlineKeyboardButton(f"{EMOJIS['back']} Назад", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_caption(
+        caption=f"{EMOJIS['bypass']} <b>Обход ссылок</b>\n\nСкиньте мне ссылку, которую хотите обойти.\n\nПример: <code>/bypass https://platoboost.app/...</code>\n\nИли просто отправьте ссылку в следующем сообщении.",
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+# Обработка ссылки
+async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get('awaiting_link', False):
+        return
+    
+    link = update.message.text.strip()
+    context.user_data['awaiting_link'] = False
+    
+    loading_msg = await update.message.reply_text(f"{EMOJIS['loading']} Обхожу ссылку...")
+    
+    # Обработка разных сервисов
+    if 'platoboost.app' in link:
+        result = bypass_platoboost(link)
+    else:
+        result = "❌ Этот сервис пока не поддерживается. Поддерживается: platoboost.app"
+    
+    keyboard = [[InlineKeyboardButton(f"{EMOJIS['bypass']} Обойти еще", callback_data='bypass_link')],
+                [InlineKeyboardButton(f"{EMOJIS['back']} В меню", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await loading_msg.delete()
+    
+    await update.message.reply_text(
+        f"{EMOJIS['success']} <b>Готово!</b>\n\nОбойденная ссылка:\n<code>{result}</code>\n\n{EMOJIS['warning']} Скопируй ссылку и вставь в браузер",
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+# Команда /bypass
+async def bypass_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.args:
+        link = context.args[0]
+        context.user_data['awaiting_link'] = False
+        
+        loading_msg = await update.message.reply_text(f"{EMOJIS['loading']} Обхожу...")
+        
+        if 'platoboost.app' in link:
+            result = bypass_platoboost(link)
+        else:
+            result = "❌ Неподдерживаемый сервис"
+        
+        await loading_msg.delete()
+        await update.message.reply_text(f"{EMOJIS['success']} Результат:\n<code>{result}</code>", parse_mode='HTML')
+    else:
+        await update.message.reply_text(f"{EMOJIS['warning']} Использование: <code>/bypass ссылка</code>", parse_mode='HTML')
+
+# Назад в меню
+async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton(f"{EMOJIS['script']} Каталог скриптов", callback_data='scripts_catalog')],
+        [InlineKeyboardButton(f"{EMOJIS['bypass']} Обойти ссылку", callback_data='bypass_link')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    welcome_text = f"""\
+{EMOJIS['welcome']} <b>Главное меню</b>
+
+Выберите действие:"""
+    
+    await query.edit_message_caption(
+        caption=welcome_text,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+# Запуск бота
+def main():
+    app = Application.builder().token(TOKEN).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("bypass", bypass_command))
+    app.add_handler(CallbackQueryHandler(scripts_catalog, pattern='scripts_catalog'))
+    app.add_handler(CallbackQueryHandler(script_zombie, pattern='script_zombie'))
+    app.add_handler(CallbackQueryHandler(bypass_start, pattern='bypass_link'))
+    app.add_handler(CallbackQueryHandler(back_to_menu, pattern='back_to_menu'))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+    
+    print("Бот запущен!")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
